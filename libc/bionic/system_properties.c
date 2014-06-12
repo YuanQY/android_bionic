@@ -383,6 +383,8 @@ static const prop_info *find_property(prop_bt *trie, const char *name,
         bool alloc_if_needed)
 {
     const char *remaining_name = name;
+    if (NULL == trie)
+        return NULL;
 
     while (true) {
         char *sep = strchr(remaining_name, '.');
