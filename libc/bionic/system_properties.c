@@ -249,12 +249,11 @@ static int map_prop_area()
         fromFile = false;
     }
 
-    fprintf(stderr, "PID(%ld): get prop from env fd: %d size: %zu\n", (long)getpid(), fd, pa_size);
-
     if (fd < 0) {
         return -1;
     }
 
+    // fprintf(stderr, "PID(%ld): get prop from env fd: %d size: %zu\n", (long)getpid(), fd, pa_size);
     struct stat fd_stat;
 #ifdef TARGET_MTK
     if (fstat(fd, &fd_stat) < 0) {
