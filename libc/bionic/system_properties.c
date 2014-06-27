@@ -124,7 +124,7 @@ static bool get_fd_from_env(int *fd, size_t *sz)
 {
     char *env = getenv("ANDROID_PROPERTY_WORKSPACE");
 
-    fprintf(stderr, "PID(%ld): get_fd_from_env (%s)\n", (long)getpid(), env);
+    // fprintf(stderr, "PID(%ld): get_fd_from_env (%s)\n", (long)getpid(), env);
     
     if (!env) {
         fprintf(stderr, "PID(%ld): There is no env 'ANDROID_PROPERTY_WORKSPACE'\n", (long)getpid());
