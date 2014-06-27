@@ -29,7 +29,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <stddef.h>
+#include <stddef.h>get_fd_from_env_ext
 #include <errno.h>
 #include <poll.h>
 #include <fcntl.h>
@@ -109,22 +109,38 @@ typedef struct prop_bt prop_bt;
 
 static const char property_service_socket[] = "/dev/socket/" PROP_SERVICE_NAME;
 static char property_filename[PATH_MAX] = PROP_FILENAME;
+#ifdef TARGET_MTK
+static bool compat_mode = true;
+#else
 static bool compat_mode = false;
+#endif
 
 prop_area *__system_property_area__ = NULL;
 
 size_t pa_data_size;
 size_t pa_size;
 
-static int get_fd_from_env(void)
+static bool get_fd_from_env(int *fd, size_t *sz)
 {
     char *env = getenv("ANDROID_PROPERTY_WORKSPACE");
 
+    fprintf(stderr, "PID(%ld): get_fd_from_env (%s)\n", (long)getpid(), env);
+    
     if (!env) {
-        return -1;
+        fprintf(stderr, "PID(%ld): There is no env 'ANDROID_PROPERTY_WORKSPACE'\n", (long)getpid());
+        return false;
     }
+    *fd = atoi(env);
 
-    return atoi(env);
+    env = strchr(env, ',');
+    if (!env) {
+        fprintf(stderr, "The env 'ANDROID_PROPERTY_WORKSPACE' invalid %s\n",
+                    getenv("ANDROID_PROPERTY_WORKSPACE"));
+        *sz = 0;
+    } else {
+        *sz = atoi(env + 1);
+    }
+    return true;
 }
 
 static int map_prop_area_rw()
@@ -201,6 +217,11 @@ static int map_prop_area()
     int result = -1;
     int fd;
     int ret;
+#ifdef TARGET_MTK
+    const int st_less_size = sizeof(unsigned) * 5;
+#else
+    const int st_less_size = sizeof(prop_area);
+#endif
 
     fd = open(property_filename, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
     if (fd >= 0) {
@@ -220,36 +241,57 @@ static int map_prop_area()
          * might be possible for an external program to trigger this
          * condition.
          */
-        fd = get_fd_from_env();
+        if(!get_fd_from_env(&fd, &pa_size)) {
+        	fprintf(stderr, "PID(%ld): Call get_fd_from_env fail\n", (long)getpid());
+            goto cleanup;
+        }
+
         fromFile = false;
     }
+
+    fprintf(stderr, "PID(%ld): get prop from env fd: %d size: %zu\n", (long)getpid(), fd, pa_size);
 
     if (fd < 0) {
         return -1;
     }
 
     struct stat fd_stat;
+#ifdef TARGET_MTK
     if (fstat(fd, &fd_stat) < 0) {
-        goto cleanup;
+        fprintf(stderr, "PID(%ld): fstat faile (%d) %s\n", (long)getpid(), dup(fd), strerror(errno));
     }
 
+    if ((pa_size < st_less_size) ) {
+        fprintf(stderr, "PID(%ld): fstat information not fit for condition\n", (long)getpid());
+        goto cleanup;
+    }
+#else
+    if (fstat(fd, &fd_stat) < 0) {
+        fprintf(stderr, "PID(%ld): fstat faile (%d) %s\n", (long)getpid(), dup(fd), strerror(errno));
+        goto cleanup;
+    }
     if ((fd_stat.st_uid != 0)
             || (fd_stat.st_gid != 0)
             || ((fd_stat.st_mode & (S_IWGRP | S_IWOTH)) != 0)
-            || (fd_stat.st_size < sizeof(prop_area)) ) {
+            || (fd_stat.st_size < st_less_size) ) {
+        fprintf(stderr, "PID(%ld): fstat information not fit for condition\n", (long)getpid());
         goto cleanup;
     }
 
     pa_size = fd_stat.st_size;
+#endif
+
     pa_data_size = pa_size - sizeof(prop_area);
     prop_area *pa = mmap(NULL, pa_size, PROT_READ, MAP_SHARED, fd, 0);
 
     if (pa == MAP_FAILED) {
+        fprintf(stderr, "PID(%ld): MAP_FAILED %s\n", (long)getpid(), strerror(errno));
         goto cleanup;
     }
 
     if((pa->magic != PROP_AREA_MAGIC) || (pa->version != PROP_AREA_VERSION &&
                 pa->version != PROP_AREA_VERSION_COMPAT)) {
+        fprintf(stderr, "Inalid format PA\n");
         munmap(pa, pa_size);
         goto cleanup;
     }
@@ -706,6 +748,6 @@ int __system_property_foreach(void (*propfn)(const prop_info *pi, void *cookie),
 {
     if (__predict_false(compat_mode)) {
         return __system_property_foreach_compat(propfn, cookie);
-	}
+    }
     return foreach_property(0, propfn, cookie);
 }

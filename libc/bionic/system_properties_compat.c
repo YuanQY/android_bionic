@@ -33,6 +33,7 @@
  * ramdisk may be using an old version of init.  This can all be removed once
  * OTAs from pre-K versions are no longer supported.
  */
+#include <stdio.h>
 
 #include <string.h>
 #include <sys/atomics.h>
@@ -69,6 +70,10 @@ extern prop_area *__system_property_area__;
 const prop_info *__system_property_find_compat(const char *name)
 {
     prop_area_compat *pa = (prop_area_compat *)__system_property_area__;
+    if (NULL == pa) {
+    	fprintf(stderr, "PID(%ld): __system_property_find_compat why pa is null\n", (long)getpid());
+    	return 0;
+    }
     unsigned count = pa->count;
     unsigned *toc = pa->toc;
     unsigned len = strlen(name);
@@ -119,6 +124,9 @@ int __system_property_foreach_compat(
         void *cookie)
 {
     prop_area_compat *pa = (prop_area_compat *)__system_property_area__;
+    if (NULL == pa) {
+    	fprintf(stderr, "PID(%ld): __system_property_find_compat why pa is null\n", (long)getpid());
+    }
     unsigned i;
 
     for (i = 0; i < pa->count; i++) {
